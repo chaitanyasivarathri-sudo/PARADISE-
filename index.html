@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PARADISE Voice Calculator</title>
+<style>
+:root{--bg:#f2f3f7;--card:#fff;--text:#000;--muted:#777;--border:#bdbdbd;--blue:#1976d2;--dark:#222;--grey:#ddd;--shadow:rgba(0,0,0,.12);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14151a;--card:#1f2027;--text:#fff;--muted:#999;--border:#555;--dark:#000;--grey:#3a3b44}}
+:root[data-theme="dark"]{--bg:#14151a;--card:#1f2027;--text:#fff;--muted:#999;--border:#555;--dark:#000;--grey:#3a3b44}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;align-items:flex-end;justify-content:center}
+.card{width:100%;max-width:520px;background:var(--card);border-radius:40px 40px 0 0;padding:48px 28px 56px;text-align:center;box-shadow:0 -6px 30px var(--shadow);margin-bottom:12vh;border-radius:40px}
+h1{margin:0 0 28px;font-size:clamp(2.4rem,12vw,3.6rem);font-weight:800;letter-spacing:-.03em}
+.sub{font-size:1.5rem;margin:0 0 28px}
+input{width:100%;font:inherit;font-size:1.5rem;padding:22px 24px;border:2px solid var(--border);border-radius:20px;background:transparent;color:var(--text);outline:none}
+input::placeholder{color:var(--muted)}
+input:focus{border-color:var(--blue)}
+.row{display:flex;gap:24px;justify-content:center;margin-top:24px}
+button{font:inherit;font-size:1.5rem;border:0;border-radius:20px;padding:20px 34px;cursor:pointer;color:#fff}
+button:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+#speak{background:var(--dark)}
+#speak.on{background:#d32f2f}
+#calc{background:var(--blue)}
+#clear{background:var(--grey);color:var(--text);margin-top:24px}
+#status{margin-top:28px;font-size:1.5rem;min-height:2em;word-break:break-word}
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>PARADISE</h1>
+  <p class="sub">Voice Calculator</p>
+  <input id="expr" type="text" inputmode="text" autocomplete="off" placeholder="Example: 10 plus 5 or 2 power 3">
+  <div class="row">
+    <button id="speak">🎤 Speak</button>
+    <button id="calc">Calculate</button>
+  </div>
+  <button id="clear">Clear</button>
+  <div id="status" role="status" aria-live="polite">Ready</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const expr=$('expr'),statusEl=$('status'),speakBtn=$('speak');
+const setStatus=t=>statusEl.textContent=t;
+
+const NUMS={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90,hundred:100,thousand:1000};
+
+function normalize(s){
+  s=' '+s.toLowerCase()+' ';
+  s=s.replace(/,/g,'');
+  const rules=[
+    [/\bsquare root of\s+([\d.]+)/g,'sqrt($1)'],
+    [/\bsqrt of\s+([\d.]+)/g,'sqrt($1)'],
+    [/\bsquared\b/g,'**2'],[/\bcubed\b/g,'**3'],
+    [/\bto the power of\b|\braised to\b|\bpower\b|\^/g,'**'],
+    [/\bmultiplied by\b|\btimes\b|\binto\b|\bmultiply\b|\bx\b|×/g,'*'],
+    [/\bdivided by\b|\bdivide by\b|\bover\b|÷/g,'/'],
+    [/\bplus\b|\badd\b|\band\b/g,'+'],
+    [/\bminus\b|\bsubtract\b|\bless\b|−/g,'-'],
+    [/\bmod\b|\bmodulo\b|\bremainder\b/g,'%'],
+    [/\bpercent of\b/g,'/100*'],
+    [/\bpoint\b/g,'.']
+  ];
+  rules.forEach(([r,v])=>s=s.replace(r,v));
+  s=s.replace(/\b([a-z]+)\b/g,(m,w)=>w in NUMS?NUMS[w]:m);
+  return s.replace(/\s+/g,' ').trim();
+}
+
+function calculate(raw){
+  const s=normalize(raw);
+  if(!s) throw new Error('Type or say something first');
+  if(!/^[\d\s+\-*/%.()sqrt]+$/.test(s)||/[a-z]/.test(s.replace(/sqrt/g,'')))
+    throw new Error("I couldn't understand that");
+  const fn=new Function('sqrt','"use strict";return ('+s+')');
+  const v=fn(Math.sqrt);
+  if(typeof v!=='number'||!isFinite(v)) throw new Error('Not a valid result');
+  return Math.round(v*1e10)/1e10;
+}
+
+function run(){
+  try{ setStatus('Result: '+calculate(expr.value)); }
+  catch(e){ setStatus(e.message.includes('Unexpected')||e.name==='SyntaxError'?"I couldn't understand that":e.message); }
+}
+
+$('calc').onclick=run;
+expr.addEventListener('keydown',e=>{if(e.key==='Enter')run()});
+$('clear').onclick=()=>{expr.value='';setStatus('Ready');expr.focus()};
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null;
+if(SR){
+  rec=new SR();rec.lang='en-US';rec.interimResults=false;rec.maxAlternatives=1;
+  rec.onstart=()=>{speakBtn.classList.add('on');setStatus('Listening…')};
+  rec.onend=()=>speakBtn.classList.remove('on');
+  rec.onerror=e=>setStatus(e.error==='not-allowed'?'Microphone blocked. Allow mic access and try again':'Voice error: '+e.error);
+  rec.onresult=e=>{expr.value=e.results[0][0].transcript;run()};
+}
+speakBtn.onclick=()=>{
+  if(!rec){setStatus('Voice input is not supported in this browser. Type instead');return}
+  try{rec.start()}catch(_){}
+};
+</script>
+</body>
+</html>
